@@ -55,7 +55,7 @@ int main()
         int n_ready_fds = epoll_wait(epoll_fd, events, MAX_EPOLL_EVENTS, -1);
     
         for(int i=0; i<n_ready_fds; i++)
-        {
+        { /* print client message */
             int conn_sock_fd = events[i].data.fd;
             if(conn_sock_fd == listen_socket_fd)
             {

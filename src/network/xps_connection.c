@@ -1,11 +1,13 @@
 #include "xps_connection.h"
 
 void connection_loop_read_handler(void *ptr);
+void connection_loop_write_handler(void *ptr);
+void connection_loop_close_handler(void *ptr);
 
-void strrev(char * s)
+void strrev(u_char * s)
 {
     char temp;
-    for(int i = 0, j = strlen(s)-2; i<j; i++,j--)
+    for(int i = 0, j = strlen((const char*)s)-2; i<j; i++,j--)
     {
         temp = s[i];
         s[i] = s[j];
@@ -21,13 +23,21 @@ xps_connection_t *xps_connection_create(xps_core_t *core, int sock_fd) {
     return NULL;
   }
 
+  xps_buffer_list_t *buffer_list = xps_buffer_list_create();
+  if (buffer_list == NULL) {
+    logger(LOG_ERROR, "xps_connection_create()", "malloc() failed for 'buffer_list'");
+    return NULL;
+  }
+
   // Init values
   connection->core = core;
   connection->sock_fd = sock_fd;
   connection->listener = NULL;
   connection->remote_ip = get_remote_ip(sock_fd);
+  connection->write_buff_list = buffer_list;
+  connection->write_buff_list->len = 0;
 
-  xps_loop_attach(core->loop, sock_fd, EPOLLIN, connection, connection_loop_read_handler);
+  xps_loop_attach(core->loop, sock_fd, EPOLLIN | EPOLLOUT, connection, connection_loop_read_handler, connection_loop_write_handler, connection_loop_close_handler);
 
   vec_push(&core->connections, connection);
 
@@ -61,6 +71,8 @@ void xps_connection_destroy(xps_connection_t *connection) {
   /* free connection->remote_ip */
   free(connection->remote_ip);
 
+  xps_buffer_list_destroy(connection->write_buff_list);
+
   /* free connection instance */
   free(connection);
 
@@ -74,7 +86,7 @@ void connection_loop_read_handler(void *ptr) {
   assert(ptr != NULL);
   xps_connection_t *connection = ptr;
 
-  char buff[BUFF_SIZE];
+  u_char buff[BUFF_SIZE];
   memset(buff, 0, BUFF_SIZE);
   long read_n = recv(connection->sock_fd, buff, sizeof(buff)-1, 0);
 
@@ -99,18 +111,67 @@ void connection_loop_read_handler(void *ptr) {
   /* reverse client message */
   strrev(buff);
 
-  // Sending reversed message to client
-  long bytes_written = 0;
-  long message_len = read_n;
-  while (bytes_written < message_len) {
-    long write_n = send(connection->sock_fd, buff + bytes_written, message_len - bytes_written, 0);
-    if (write_n < 0) {
-      logger(LOG_ERROR, "xps_connection_read_handler()", "send() failed");
-      perror("Error message");
-      xps_connection_destroy(connection);
-      return;
-    }
-    bytes_written += write_n;
+  xps_buffer_t *buffer = xps_buffer_create(sizeof(buff), read_n, NULL);
+  if (buffer != NULL) {
+    memcpy(buffer->data, buff, read_n);
+    xps_buffer_list_append(connection->write_buff_list, buffer);
+  } else {
+    logger(LOG_ERROR, "connection_loop_read_handler()", "Failed to allocate buffer");
+  }
+}
+
+void connection_loop_write_handler(void *ptr){
+  assert(ptr != NULL);
+  xps_connection_t *connection = ptr;
+
+  if(connection->write_buff_list->len == 0)
+  {
+    logger(LOG_DEBUG, "connection_loop_write_handler()", "buffer_empty");
+    return;
   }
 
+  xps_buffer_t *buffer = xps_buffer_list_read(connection->write_buff_list, connection->write_buff_list->len);
+
+  if(buffer == NULL)
+  {
+    logger(LOG_ERROR, "connection_loop_write_handler()", "failed to create buffer");
+    return;
+  }
+
+  // Sending reversed message to client
+  size_t bytes_written = 0;
+  while (bytes_written < connection->write_buff_list->len) {
+    long write_n = send(connection->sock_fd, buffer->data + bytes_written, connection->write_buff_list->len - bytes_written, 0);
+    if (write_n < 0) {
+      if(errno == EAGAIN || errno == EWOULDBLOCK)
+      {
+        logger(LOG_DEBUG, "connection_loop_write_handler()", "break because of eagain");
+        break;
+      }
+      else {
+        logger(LOG_ERROR, "xps_connection_write_handler()", "send() failed");
+        perror("Error message");
+        xps_buffer_destroy(buffer);
+        xps_connection_destroy(connection);
+        return;
+      }
+    }
+    bytes_written+= write_n;
+  }
+
+  if(bytes_written > 0)
+  {
+    if(xps_buffer_list_clear(connection->write_buff_list, bytes_written) != OK)
+    {
+      logger(LOG_ERROR, "connection_loop_write_handler()", "Failed to clear buffer list");
+    }
+  }
+
+  xps_buffer_destroy(buffer);
+}
+
+void connection_loop_close_handler(void *ptr){
+  xps_connection_t *connection = ptr;
+  xps_connection_destroy(connection);
+  return;
 }
