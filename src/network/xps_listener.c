@@ -1,4 +1,5 @@
 #include "xps_listener.h"
+#include "xps_connection.h"
 #include "xps_upstream.h"
 
 void listener_connection_handler(void *ptr);
@@ -144,7 +145,31 @@ void listener_connection_handler(void * ptr) {
       xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, client->source, upstream->sink);
       /*create pipe connection to upstream source and client sink for the listener*/
       xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, upstream->source, client->sink);
-    } else {
+    } else if (listener->port == 8002) {
+      int error;
+      xps_file_t *file = xps_file_create(listener->core, "../public/sample.txt", &error);
+      if(file == NULL)
+      {
+        logger(LOG_INFO, "listener_connection_handler()", "xps_file_create failed");
+        xps_connection_destroy(client);
+        continue;
+      }
+      else {
+        xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, file->source, client->sink);
+      }
+    } else if (listener->port == 8003) {
+      int error;
+      xps_file_t *file = xps_file_create(listener->core, "../temp/file.txt", &error);
+      if(file == NULL)
+      {
+        logger(LOG_INFO, "listener_connection_handler()", "xps_file_create failed");
+        xps_connection_destroy(client);
+        continue;
+      }
+      else {
+        xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, file->source, client->sink);
+        }
+      } else {
       /* same as previous stages*/
       xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, client->source, client->sink);
     }
