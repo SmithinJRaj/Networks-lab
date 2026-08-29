@@ -21,6 +21,7 @@
 #define DEFAULT_BACKLOG 64
 #define MAX_EPOLL_EVENTS 32
 #define DEFAULT_BUFFER_SIZE 100000
+#define DEFAULT_PIPE_BUFF_THRESH 1000000
 #define BUFF_SIZE 10000
 #define DEFAULT_NULLS_THRESH 32
 
@@ -43,6 +44,9 @@ struct xps_listener_s;
 struct xps_connection_s;
 struct xps_buffer_s;
 struct xps_buffer_list_s;
+struct xps_pipe_s;
+struct xps_pipe_source_s;
+struct xps_pipe_sink_s;
 
 typedef struct xps_core_s xps_core_t;
 typedef struct xps_loop_s xps_loop_t;
@@ -50,13 +54,18 @@ typedef struct xps_listener_s xps_listener_t;
 typedef struct xps_connection_s xps_connection_t;
 typedef struct xps_buffer_s xps_buffer_t;
 typedef struct xps_buffer_list_s xps_buffer_list_t;
+typedef struct xps_pipe_s xps_pipe_t;
+typedef struct xps_pipe_source_s xps_pipe_source_t;
+typedef struct xps_pipe_sink_s xps_pipe_sink_t;
 
 typedef void (*xps_handler_t)(void *ptr);
 
 #include "core/xps_core.h"
 #include "core/xps_loop.h"
+#include "core/xps_pipe.h"
 #include "network/xps_connection.h"
 #include "network/xps_listener.h"
+#include "network/xps_upstream.h"
 #include "utils/xps_logger.h"
 #include "utils/xps_utils.h"
 #include "utils/xps_buffer.h"

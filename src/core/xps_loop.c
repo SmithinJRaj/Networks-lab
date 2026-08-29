@@ -1,7 +1,9 @@
 #include "xps_loop.h"
-#include <stdio.h>
+#include "xps_pipe.h"
 
-bool handle_connections(xps_loop_t* loop);
+void handle_epoll_events(xps_loop_t *loop, int n_events);
+bool handle_pipes(xps_loop_t *loop);
+void filter_nulls(xps_core_t *core);
 
 loop_event_t *loop_event_create(u_int fd, void *ptr, xps_handler_t read_cb, xps_handler_t write_cb, xps_handler_t close_cb) {
   assert(ptr != NULL);
@@ -165,8 +167,9 @@ void xps_loop_run(xps_loop_t *loop) {
   assert(loop!=NULL);
 
   while (1) {
+    logger(LOG_DEBUG, "xps_loop_run()", "loop top");
     bool has_ready_connections = false;
-    has_ready_connections = handle_connections(loop);
+    has_ready_connections = handle_pipes(loop);
     int timeout;
     if(has_ready_connections == true)
     {
@@ -175,16 +178,109 @@ void xps_loop_run(xps_loop_t *loop) {
     else {
       timeout = -1;
     }
-    logger(LOG_DEBUG, "xps_loop_run()", "epoll wait");
+    logger(LOG_DEBUG, "xps_loop_run()", "epoll waiting");
     int n_events = epoll_wait(loop->epoll_fd, loop->epoll_events, MAX_EPOLL_EVENTS, timeout);
     logger(LOG_DEBUG, "xps_loop_run()", "epoll wait over");
 
-    logger(LOG_DEBUG, "xps_loop_run()", "handling %d events", n_events);
+    if (n_events < 0)
+        logger(LOG_ERROR, "xps_loop_run()", "epoll_wait() error");
+
+    if (n_events > 0)
+        handle_epoll_events(loop, n_events);
+    
+    filter_nulls(loop->core);
+  }
+}
+
+bool handle_pipes(xps_loop_t *loop) {
+    assert(loop != NULL);
+    for (int i = 0; i < loop->core->pipes.length; i++) {
+    xps_pipe_t *pipe = loop->core->pipes.data[i];
+    if (pipe == NULL)
+        continue;
+
+    /*Destroy the pipe if it has no source and sink and continue*/
+    if(pipe->sink == NULL && pipe->source == NULL)
+    {
+      xps_pipe_destroy(pipe);
+      continue;
+    }
+
+    if (pipe->source != NULL && pipe->source->ready == true && xps_pipe_is_writable(pipe)){
+        pipe->source->handler_cb(pipe->source);//call connection_source_handler to write into  pipe
+    }
+
+    if (pipe->sink != NULL && pipe->sink->ready == true && xps_pipe_is_readable(pipe)) {
+        pipe->sink->handler_cb(pipe->sink);//call connection_sink_handler to read from pipe
+    }
+
+    if (pipe->source!=NULL && pipe->sink==NULL) {
+        pipe->source->active = false;
+        pipe->source->close_cb(pipe->source);
+    }
+
+    if (pipe->sink!=NULL && pipe->source==NULL && xps_pipe_is_readable(pipe) == false) {
+        pipe->sink->active = false;
+        pipe->sink->close_cb(pipe->sink);
+    }
+
+    }
+
+    for (int i = 0; i < loop->core->pipes.length; i++) {
+    xps_pipe_t *pipe = loop->core->pipes.data[i];
+    if (pipe == NULL){
+        logger(LOG_DEBUG, "handle_pipes", "pipe is null");
+        continue;
+    }
+    if (pipe->source != NULL && pipe->source->ready == true && xps_pipe_is_writable(pipe)){
+            return true;
+    }
+    if (pipe->sink != NULL && pipe->sink->ready == true && xps_pipe_is_readable(pipe)) {
+                return true;
+    }
+    if (pipe->source!=NULL && pipe->sink==NULL) {
+        return true;
+    }
+    if (pipe->sink!=NULL && pipe->source==NULL && xps_pipe_is_readable(pipe) == false) {
+        return true;
+    }
+    }
+    return false;
+}
+
+void filter_nulls(xps_core_t *core) {
+/*check whether number of nulls in each of events, listeners, connections, pipes list
+    exceeds DEFAULT_NULLS_THRESH and filter nulls using vec_filter_null() and set
+    number of nulls in each list to 0*/
+    if(core->n_null_listeners > DEFAULT_NULLS_THRESH)
+    {
+      vec_filter_null(&(core->listeners));
+      core->n_null_listeners = 0;
+    }
+    if(core->n_null_connections > DEFAULT_NULLS_THRESH)
+    {
+      vec_filter_null(&(core->connections));
+      core->n_null_connections = 0;
+    }
+    if(core->loop->n_null_events > DEFAULT_NULLS_THRESH)
+    {
+      vec_filter_null(&(core->loop->events));
+      core->loop->n_null_events = 0;
+    }
+    if(core->n_null_pipes > DEFAULT_NULLS_THRESH)
+    {
+      vec_filter_null(&(core->pipes));
+      core->n_null_pipes = 0;
+    }
+}
+
+void handle_epoll_events(xps_loop_t *loop, int n_events) {
+    logger(LOG_DEBUG, "handle_epoll_events()", "handling %d events", n_events);
 
     // Handle events
     for (int i = 0; i < n_events; i++) {
-      logger(LOG_DEBUG, "xps_loop_run()", "handling event no. %d", i + 1);
-
+    logger(LOG_DEBUG, "handle_epoll_events()", "handling event no. %d", i + 1);
+      /*Handle events as given in existing xps_loop_run()*/
       struct epoll_event curr_epoll_event = loop->epoll_events[i];
       loop_event_t *curr_event = curr_epoll_event.data.ptr;
 
@@ -216,10 +312,11 @@ void xps_loop_run(xps_loop_t *loop) {
         if (curr_event->close_cb != NULL)
           // Pass the ptr from loop_event_t as a parameter to the callback
           curr_event->close_cb(curr_event->ptr);
+        continue;
       }
 
       // Read event
-      else if (curr_epoll_event.events & EPOLLIN) {
+      if (curr_epoll_event.events & EPOLLIN) {
         if(curr_event == NULL)
         {
           logger(LOG_ERROR, "handle_epoll_events()", "EVENT / read error");
@@ -231,7 +328,7 @@ void xps_loop_run(xps_loop_t *loop) {
           curr_event->read_cb(curr_event->ptr);
       }
 
-      else if (curr_epoll_event.events & EPOLLOUT) {
+      if (curr_epoll_event.events & EPOLLOUT) {
         if(curr_event == NULL)
         {
           logger(LOG_ERROR, "handle_epoll_events()", "EVENT / write error");
@@ -243,44 +340,4 @@ void xps_loop_run(xps_loop_t *loop) {
           curr_event->write_cb(curr_event->ptr);
       }
     }
-  }
-}
-
-bool handle_connections(xps_loop_t* loop) {
-    for (int i = 0; i < loop->core->connections.length; i++) {
-        xps_connection_t* connection = loop->core->connections.data[i];
-        if(connection !=NULL)
-        {
-
-          if (connection->read_ready == true)
-              connection->recv_handler(connection);
-
-          //check if connection still exists
-          if(loop->core->connections.data[i] ==NULL)
-          {
-            continue;
-          }
-
-          if (connection->write_ready == true && connection->write_buff_list->len > 0)
-              connection->send_handler(connection);
-        }
-    }
-
-    for (int i = 0; i < loop->core->connections.length; i++) {
-        xps_connection_t* connection = loop->core->connections.data[i];
-
-				/*check if connection is NULL and continue if it is*/
-        if(connection ==NULL)
-        {
-          continue;
-        }
-
-        if (connection->read_ready == true)
-            return true;
-
-        if (connection->write_ready == true && connection->write_buff_list->len > 0)
-            return true;
-    }
-
-    return false;
 }

@@ -22,3 +22,7 @@ void sigint_handler(int signum)
 
   exit(EXIT_SUCCESS);
 }
+
+// docker compose -f docker-compose.dev.yaml down
+// docker compose -f docker-compose.dev.yaml up -d
+// docker compose -f docker-compose.dev.yaml logs -f

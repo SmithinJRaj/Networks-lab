@@ -1,4 +1,5 @@
 #include "xps_listener.h"
+#include "xps_upstream.h"
 
 void listener_connection_handler(void *ptr);
 
@@ -91,6 +92,7 @@ void xps_listener_destroy(xps_listener_t *listener) {
     }
   }
 
+  listener->core->n_null_listeners = listener->core->n_null_listeners + 1;
   // Close socket
   close(listener->sock_fd);
 
@@ -134,6 +136,19 @@ void listener_connection_handler(void * ptr) {
     }
     client->listener = listener;
 
-    logger(LOG_INFO, "xps_listener_connection_handler()", "new connection");
+    if (listener->port == 8001) {
+
+      /* create upstream connection to 127.0.0.1:3000 */
+      xps_connection_t *upstream = xps_upstream_create(listener->core, "127.0.0.1", 3000);
+      /*create pipe connection to  client source and upstream sink for the listener*/
+      xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, client->source, upstream->sink);
+      /*create pipe connection to upstream source and client sink for the listener*/
+      xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, upstream->source, client->sink);
+    } else {
+      /* same as previous stages*/
+      xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, client->source, client->sink);
+    }
+
+    logger(LOG_INFO, "listener_connection_handler()", "new connection");
   }
 }
