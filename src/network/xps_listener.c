@@ -1,6 +1,5 @@
 #include "xps_listener.h"
 #include "xps_connection.h"
-#include "xps_upstream.h"
 
 void listener_connection_handler(void *ptr);
 
@@ -137,41 +136,11 @@ void listener_connection_handler(void * ptr) {
     }
     client->listener = listener;
 
-    if (listener->port == 8001) {
-
-      /* create upstream connection to 127.0.0.1:3000 */
-      xps_connection_t *upstream = xps_upstream_create(listener->core, "127.0.0.1", 3000);
-      /*create pipe connection to  client source and upstream sink for the listener*/
-      xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, client->source, upstream->sink);
-      /*create pipe connection to upstream source and client sink for the listener*/
-      xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, upstream->source, client->sink);
-    } else if (listener->port == 8002) {
-      int error;
-      xps_file_t *file = xps_file_create(listener->core, "../public/sample.txt", &error);
-      if(file == NULL)
-      {
-        logger(LOG_INFO, "listener_connection_handler()", "xps_file_create failed");
-        xps_connection_destroy(client);
-        continue;
-      }
-      else {
-        xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, file->source, client->sink);
-      }
-    } else if (listener->port == 8003) {
-      int error;
-      xps_file_t *file = xps_file_create(listener->core, "../temp/file.txt", &error);
-      if(file == NULL)
-      {
-        logger(LOG_INFO, "listener_connection_handler()", "xps_file_create failed");
-        xps_connection_destroy(client);
-        continue;
-      }
-      else {
-        xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, file->source, client->sink);
-        }
-      } else {
-      /* same as previous stages*/
-      xps_pipe_create(listener->core, DEFAULT_PIPE_BUFF_THRESH, client->source, client->sink);
+    xps_session_t *session = xps_session_create(listener->core, client);
+    if (session == NULL) {
+      logger(LOG_ERROR, "listener_connection_handler()", "xps_session_create() failed");
+      xps_connection_destroy(client);
+      return;
     }
 
     logger(LOG_INFO, "listener_connection_handler()", "new connection");

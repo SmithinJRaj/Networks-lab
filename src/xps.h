@@ -50,6 +50,7 @@ struct xps_pipe_source_s;
 struct xps_pipe_sink_s;
 struct xps_file_s;
 struct xps_keyval_s;
+struct xps_session_s;
 
 typedef struct xps_core_s xps_core_t;
 typedef struct xps_loop_s xps_loop_t;
@@ -62,12 +63,14 @@ typedef struct xps_pipe_source_s xps_pipe_source_t;
 typedef struct xps_pipe_sink_s xps_pipe_sink_t;
 typedef struct xps_file_s xps_file_t;
 typedef struct xps_keyval_s xps_keyval_t;
+typedef struct xps_session_s xps_session_t;
 
 typedef void (*xps_handler_t)(void *ptr);
 
 #include "core/xps_core.h"
 #include "core/xps_loop.h"
 #include "core/xps_pipe.h"
+#include "core/xps_session.h"
 #include "network/xps_connection.h"
 #include "network/xps_listener.h"
 #include "network/xps_upstream.h"
