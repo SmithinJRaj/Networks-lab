@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <sys/stat.h>
+#include <ctype.h>
 
 #include "lib/vec/vec.h"
 
@@ -51,6 +52,7 @@ struct xps_pipe_sink_s;
 struct xps_file_s;
 struct xps_keyval_s;
 struct xps_session_s;
+struct xps_http_req_s;
 
 typedef struct xps_core_s xps_core_t;
 typedef struct xps_loop_s xps_loop_t;
@@ -64,6 +66,8 @@ typedef struct xps_pipe_sink_s xps_pipe_sink_t;
 typedef struct xps_file_s xps_file_t;
 typedef struct xps_keyval_s xps_keyval_t;
 typedef struct xps_session_s xps_session_t;
+typedef struct xps_http_req_s xps_http_req_t;
+typedef struct xps_http_res_s xps_http_res_t;
 
 typedef void (*xps_handler_t)(void *ptr);
 
@@ -79,5 +83,7 @@ typedef void (*xps_handler_t)(void *ptr);
 #include "utils/xps_buffer.h"
 #include "disk/xps_file.h"
 #include "disk/xps_mime.h"
+#include "http/xps_http.h"
+#include "http/xps_http_req.h"
 
 #endif

@@ -25,4 +25,6 @@ void sigint_handler(int signum)
 
 // docker compose -f docker-compose.dev.yaml down
 // docker compose -f docker-compose.dev.yaml up -d
+// docker compose -f docker-compose.dev.yaml restart
 // docker compose -f docker-compose.dev.yaml logs -f
+// cat /home/lesmithbro/Documents/My-Stuff/Downloads/QuartusLiteSetup-20.1.1.720-linux.run | ./sender
