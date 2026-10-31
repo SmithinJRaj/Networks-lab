@@ -384,13 +384,16 @@ void xps_session_destroy(xps_session_t *session) {
 void session_process_request(xps_session_t *session) {
   assert(session != NULL);
   /*allocate a reply buffer that will store response*/
-  char * reply = (char *)malloc(DEFAULT_BUFFER_SIZE*sizeof(char));
   // BAD REQUEST
   if (session->http_req == NULL/*http_req is null*/) {
-    sprintf(reply, "HTTP/1.1 400} Bad Request\r\nServer: eXpServer\r\n\r\n");
-    xps_buffer_t *buff = xps_buffer_create(strlen(reply), strlen(reply), reply);
+    xps_http_res_t * http_res = xps_http_res_create(session->core, HTTP_BAD_REQUEST);
+    xps_http_set_header(&(http_res->headers), "Content-Length", "0");
     /*set buff to to_client_buff*/
+    xps_http_set_header(&(http_res->headers), "Content-Type", "text/plain");
+    xps_buffer_t *buff = xps_http_res_serialize(http_res);
     set_to_client_buff(session, buff);
+    printf("RESPONSE: %s", buff->data);
+    xps_http_res_destroy(http_res);
     return;
   }
 	if (session->http_req->path) {
@@ -402,35 +405,43 @@ void session_process_request(xps_session_t *session) {
     session->file = xps_file_create(session->core, file_path, &error);
 		/*handle all possible errors on file creation (E_PERMISSION,E_NOTFOUND,any other)
 		by giving corresponding http response messages*/
+    int code=HTTP_BAD_REQUEST;
     if(error!=OK)
     {
       if(error == E_PERMISSION)
       {
-        sprintf(reply, "HTTP/1.1 400 E_PERMISSION\r\n\r\n");
+        code = HTTP_FORBIDDEN;
       }
       else if(error == E_NOTFOUND)
       {
-        sprintf(reply, "HTTP/1.1 404} Not Found\r\nServer: eXpServer\r\n\r\n");
+        code = HTTP_NOT_FOUND;
       }
       else {
-        sprintf(reply, "HTTP/1.1 400} Bad Request\r\nServer: eXpServer\r\n\r\n");
+        code = HTTP_BAD_REQUEST;
       }
-      xps_buffer_t *buff = xps_buffer_create(strlen(reply), strlen(reply), reply);
-      /*set buff to to_client_buff*/
+      xps_http_res_t * http_res = xps_http_res_create(session->core, code);
+      xps_http_set_header(&(http_res->headers), "Content-Length", "0");
+      xps_http_set_header(&(http_res->headers), "Content-Type", "text/plain");
+      xps_buffer_t *buff = xps_http_res_serialize(http_res);
       set_to_client_buff(session, buff);
-
+      printf("RESPONSE: %s", buff->data);
+      xps_http_res_destroy(http_res);
       return;
     }
     if (session->file->mime_type) {
-      sprintf(reply,
-              "HTTP/1.1 200 OK \r\nServer: eXpServer\r\nAccess-Control-Allow-Origin: "
-              "*\r\nContent-Length: %zu\r\nContent-Type: %s\r\n\r\n",
-              session->file->size, session->file->mime_type);
+      code = HTTP_OK;
     }
-    xps_buffer_t *buff = xps_buffer_create(strlen(reply), strlen(reply), reply);
+    char content_length_str[32];
+    snprintf(content_length_str, sizeof(content_length_str), "%zu", session->file->size);
+    xps_http_res_t * http_res = xps_http_res_create(session->core, HTTP_OK);
     /*set buff to to_client_buff*/
+    xps_http_set_header(&(http_res->headers), "Content-Length", content_length_str);
+    xps_http_set_header(&(http_res->headers), "Content-Type", session->file->mime_type);
+    xps_buffer_t *buff = xps_http_res_serialize(http_res);
     set_to_client_buff(session, buff);
     /*create pipe with session->file->source and session->file_sink*/
     xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH, session->file->source, session->file_sink);
+    printf("RESPONSE: %s", buff->data);
+    xps_http_res_destroy(http_res);
   }
 }

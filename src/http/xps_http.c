@@ -508,13 +508,13 @@ xps_buffer_t *xps_http_serialize_headers(vec_void_t *headers) {
   assert(headers != NULL);
 	/*create a buffer and initialize first byte to null terminator*/
   xps_buffer_t * buff = xps_buffer_create(DEFAULT_BUFFER_SIZE, 0, NULL);
-  buff->data[0] = '\n';
+  buff->data[0] = '\0';
   for (int i = 0; i < headers->length; i++) {
     /*get required length to store a header*/
     xps_keyval_t *header = headers->data[i];
     int header_str_len = strlen(header->key) + 2 + strlen(header->val) + 2;
     char header_str[header_str_len];
-    sprintf(header_str, "%s: %s\n", header->key, header->val);
+    sprintf(header_str, "%s: %s\r\n", header->key, header->val);
     if ((buff->size - buff->len) < header_str_len) { //buffer is small
       u_char *new_data = realloc(buff->data, 2*buff->size);/*realloc() buffer to twice size*/
       if(new_data == NULL)
@@ -531,4 +531,38 @@ xps_buffer_t *xps_http_serialize_headers(vec_void_t *headers) {
     buff->len = strlen(buff->data);
   }
 	return buff;
+}
+
+int xps_http_set_header(vec_void_t *headers, const char *key, const char *val) {
+  /* Validate params */
+  assert(headers!=NULL);
+  assert(key!=NULL);
+  assert(val!=NULL);
+  xps_keyval_t *header = (xps_keyval_t *)malloc(sizeof(xps_keyval_t))/* fill this */;
+  if (header == NULL) {
+    logger(LOG_ERROR, "xps_http_set_header()", "malloc() failed for 'header'");
+    return E_FAIL;
+  }
+
+  /* allocate memory for header->key and header->val */
+  header->key = (char *)malloc(strlen(key)+1);
+  header->val = (char *)malloc(strlen(val)+1);
+
+  if (header->key == NULL || header->val == NULL) {
+    free(header->key);
+    free(header->val);
+    free(header);
+    logger(LOG_ERROR, "xps_http_set_header()",
+           "malloc() failed for 'header->key' or 'header->val'");
+    return E_FAIL;
+  }
+
+  /* copy contents of key and value given into the header fields */
+  strcpy(header->key, key);
+  strcpy(header->val, val);
+
+  /* add the header to header list */
+  vec_push(headers, header);
+
+  return OK;
 }

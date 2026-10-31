@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "lib/vec/vec.h"
 
@@ -26,6 +27,7 @@
 #define DEFAULT_PIPE_BUFF_THRESH 1000000
 #define BUFF_SIZE 10000
 #define DEFAULT_NULLS_THRESH 32
+#define SERVER_NAME "eXpServer"
 
 // Error constants
 #define OK 0            // Success
@@ -53,6 +55,7 @@ struct xps_file_s;
 struct xps_keyval_s;
 struct xps_session_s;
 struct xps_http_req_s;
+struct xps_http_res_s;
 
 typedef struct xps_core_s xps_core_t;
 typedef struct xps_loop_s xps_loop_t;
@@ -85,5 +88,6 @@ typedef void (*xps_handler_t)(void *ptr);
 #include "disk/xps_mime.h"
 #include "http/xps_http.h"
 #include "http/xps_http_req.h"
+#include "http/xps_http_res.h"
 
 #endif
