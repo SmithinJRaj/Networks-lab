@@ -30,23 +30,31 @@ xps_http_res_t *xps_http_res_create(xps_core_t *core, u_int code)
 
   if(code == 200)
   {
-    sprintf(http_res->response_line, "HTTP/1.1 200} OK");
+    sprintf(http_res->response_line, "HTTP/1.1 200 OK");
   }
   else if(code == HTTP_BAD_REQUEST)
   {
-    sprintf(http_res->response_line, "HTTP/1.1 400} Bad Request");
-  }
-  else if(code == HTTP_FORBIDDEN)
-  {
-    sprintf(http_res->response_line, "HTTP/1.1 400 E_PERMISSION");
+    sprintf(http_res->response_line, "HTTP/1.1 400 Bad Request");
   }
   else if(code == HTTP_NOT_FOUND)
   {
-    sprintf(http_res->response_line, "HTTP/1.1 404} Not Found");
+    sprintf(http_res->response_line, "HTTP/1.1 404 Not Found");
   }
   else if(code == HTTP_OK)
   {
-    sprintf(http_res->response_line,"HTTP/1.1 200} OK");
+    sprintf(http_res->response_line,"HTTP/1.1 200 OK");
+  }
+  else if(code == HTTP_MOVED_TEMPORARILY)
+  {
+    sprintf(http_res->response_line,"HTTP/1.1 302 Found");
+  }
+  else if(code == HTTP_INTERNAL_SERVER_ERROR)
+  {
+    sprintf(http_res->response_line,"HTTP/1.1 500 Internal Server Error");
+  }
+  else if(code == HTTP_FORBIDDEN)
+  {
+    sprintf(http_res->response_line,"HTTP/1.1 403 Forbidden");
   }
   vec_init(&(http_res->headers));
   http_res->body = xps_buffer_create(BUFF_SIZE, 0, NULL);
