@@ -1,4 +1,17 @@
 #include "xps_config.h"
+#include <string.h>
+
+static const char *default_gzip_mimes[] = {
+    "text/html",
+    "text/css",
+    "text/plain",
+    "text/javascript",
+    "application/javascript",
+    "application/json",
+    "application/xml",
+    "image/svg+xml"
+};
+static const int num_default_gzip_mimes = sizeof(default_gzip_mimes) / sizeof(default_gzip_mimes[0]);
 
 xps_config_t *xps_config_create(const char *config_path) {
   /*assert*/
@@ -106,6 +119,15 @@ xps_config_t *xps_config_create(const char *config_path) {
               }
             }
         }
+        config_route->gzip_enable = json_object_get_boolean(route, "gzip_enable");
+        config_route->gzip_level = json_object_get_number(route, "gzip_level");
+        vec_init(&(config_route->gzip_mime_types));
+        JSON_Array * gzip_mime_types = json_object_get_array(route, "gzip_mime_types");
+        for (size_t k = 0; k < json_array_get_count(gzip_mime_types); k++)
+        {
+            char * gzip_mime_type = json_array_get_string(gzip_mime_types, k);
+            vec_push(&(config_route->gzip_mime_types), gzip_mime_type);
+        }
         vec_push(&(config_server->routes), config_route);
     }
     vec_push(&(config->servers), config_server);
@@ -138,7 +160,7 @@ void xps_config_destroy(xps_config_t *config)
     vec_deinit(&(server->listeners));
     vec_deinit(&(server->hostnames));
 
-    for(int j=0; j < server->listeners.length; j++)
+    for(int j=0; j < server->routes.length; j++)
     {
       xps_config_route_t * route = server->routes.data[j];
       vec_deinit(&(route->index));
@@ -244,6 +266,9 @@ xps_config_lookup_t *xps_config_lookup(xps_config_t *config, xps_http_req_t *htt
   lookup->dir_path = NULL;
   lookup->ip_blacklist = route->ip_blacklist;
   lookup->ip_whitelist = route->ip_whitelist;
+  lookup->gzip_enable = route->gzip_enable;
+  lookup->gzip_level = route->gzip_level;
+  lookup->gzip_mime_eligible = false;
   if(strcmp("redirect",route->type) == 0)
   {
     lookup->type = REQ_REDIRECT;
@@ -274,11 +299,12 @@ xps_config_lookup_t *xps_config_lookup(xps_config_t *config, xps_http_req_t *htt
     {
       relative_path++;
     }
+    const char *base_dir = route->dir_path;
     if(route->dir_path == NULL)
     {
-      route->dir_path = "../public";
+      base_dir = "../public";
     }
-    char *resource_path = path_join(route->dir_path ,relative_path);/*use path_join to join paths*/
+    char *resource_path = path_join(base_dir ,relative_path);/*use path_join to join paths*/
     if (!is_abs_path(resource_path)) {
       /* we require abosulte path so we need to see
         if the current path is absolute or not */
@@ -296,6 +322,7 @@ xps_config_lookup_t *xps_config_lookup(xps_config_t *config, xps_http_req_t *htt
     // is file
     if (is_file(resource_path)) {
       lookup->file_path = resource_path;/*fill here*/;
+      
 
     } else if (is_dir(resource_path)) { // is directory
       /* If request is for a directory, serve the index file (e.g. index.html)
@@ -323,6 +350,32 @@ xps_config_lookup_t *xps_config_lookup(xps_config_t *config, xps_http_req_t *htt
       free(resource_path);
     }
     *error = OK;
+    if(lookup->file_path !=NULL)
+    {
+      const char *mime_type = xps_get_mime(lookup->file_path);
+      if(mime_type!=NULL)
+      {
+        for(int p=0; p< route->gzip_mime_types.length; p++)
+        {
+          if(strcmp(route->gzip_mime_types.data[p], mime_type) == 0)
+          {
+            lookup->gzip_mime_eligible = true;
+            break;
+          }
+        }
+        if(lookup->gzip_mime_eligible == false)
+        {
+          for(int p=0; p< num_default_gzip_mimes; p++)
+          {
+            if(strcmp(default_gzip_mimes[p], xps_get_mime(lookup->file_path))==0)
+            {
+              lookup->gzip_mime_eligible = true;
+              break;
+            }
+          }
+        }
+      }
+    }
     return lookup;
   }
   return NULL;

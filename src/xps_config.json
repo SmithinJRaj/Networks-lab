@@ -14,7 +14,10 @@
 					"req_path": "/",
 					"type": "file_serve",
 					"ip_whitelist": ["127.0.0.1", "0.0.0.0"],
-					"ip_blacklist": ["127.0.0.2"]
+					"ip_blacklist": ["127.0.0.2"],
+					"gzip_enable": true,
+					"gzip_level": 8,
+					"gzip_mime_types": ["text/x-c"]
 				},
 				{
 					"req_path": "/redirect",

@@ -72,6 +72,7 @@ xps_session_t *xps_session_create(xps_core_t *core, xps_connection_t *client) {
   session->client_sink->ready = true;/* fill this */
   session->upstream_sink->ready = true;/* fill this */
   session->file_sink->ready = true;/* fill this */
+  session->gzip = NULL;
 
   session->http_req = NULL;
 
@@ -541,17 +542,39 @@ void session_process_request(xps_session_t *session) {
     if (session->file->mime_type) {
       code = HTTP_OK;
     }
-    char content_length_str[32];
-    snprintf(content_length_str, sizeof(content_length_str), "%zu", session->file->size);
-    xps_http_res_t * http_res = xps_http_res_create(session->core, HTTP_OK);
-    /*set buff to to_client_buff*/
-    xps_http_set_header(&(http_res->headers), "Content-Length", content_length_str);
+    bool client_accept = false;
+    const char *accept_encoding = xps_http_get_header(&(session->http_req->headers), "Accept-Encoding");
+    if(accept_encoding != NULL && strstr(accept_encoding, "gzip")!=NULL)
+    {
+      client_accept = true;
+    }
+
+    xps_http_res_t *http_res = xps_http_res_create(session->core, code);
     xps_http_set_header(&(http_res->headers), "Content-Type", session->file->mime_type);
-    xps_buffer_t *buff = xps_http_res_serialize(http_res);
-    set_to_client_buff(session, buff);
-    /*create pipe with session->file->source and session->file_sink*/
-    xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH, session->file->source, session->file_sink);
-    printf("RESPONSE: %s", buff->data);
+    if(lookup->gzip_enable && lookup->gzip_mime_eligible && client_accept)
+    {
+      session->gzip = xps_gzip_create(lookup->gzip_level);
+
+      xps_http_set_header(&(http_res->headers), "Content-Encoding", "gzip");
+      xps_http_set_header(&(http_res->headers), "Connection", "close");
+
+      xps_buffer_t *buff = xps_http_res_serialize(http_res);
+      set_to_client_buff(session, buff);
+
+      xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH, session->file->source, session->gzip->sink);
+      xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH, session->gzip->source, session->file_sink);
+    }
+    else {
+      char content_length_str[32];
+      snprintf(content_length_str, sizeof(content_length_str), "%zu", session->file->size);
+      /*set buff to to_client_buff*/
+      xps_http_set_header(&(http_res->headers), "Content-Length", content_length_str);
+      xps_buffer_t *buff = xps_http_res_serialize(http_res);
+      set_to_client_buff(session, buff);
+      /*create pipe with session->file->source and session->file_sink*/
+      xps_pipe_create(session->core, DEFAULT_PIPE_BUFF_THRESH, session->file->source, session->file_sink);
+    }
+    printf("RESPONSE: %s", session->to_client_buff->data);
     xps_http_res_destroy(http_res);
   }
   else if (lookup->type == REQ_REVERSE_PROXY) {

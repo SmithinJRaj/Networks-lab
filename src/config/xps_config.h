@@ -33,6 +33,9 @@ struct xps_config_route_s {
 
 	vec_void_t ip_whitelist;
 	vec_void_t ip_blacklist;
+	bool gzip_enable;
+	int gzip_level;
+	vec_void_t gzip_mime_types;
 };
 
 typedef enum xps_req_type_e {
@@ -60,6 +63,10 @@ struct xps_config_lookup_s {
 	/* common */
 	vec_void_t ip_whitelist;
 	vec_void_t ip_blacklist;
+
+	bool gzip_enable;
+	int gzip_level;
+	bool gzip_mime_eligible;
 };
 
 xps_config_t *xps_config_create(const char *config_path);
